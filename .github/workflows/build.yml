@@ -42,9 +42,11 @@ jobs:
           mkdir -p $PREFIX/include/noisepp
           find . -name "*.h" -exec cp --parents {} $PREFIX/include/noisepp/ \;
           find . -name "libNoisepp.a" -exec cp {} $PREFIX/lib/ \;
-
+     
       - name: Build game
-        run: make
+        run: |
+          sed -i 's/= get_crc_table();/= (const unsigned long*)get_crc_table();/' Aurora/Utils/pgeZip.c
+          make -k
 
       - uses: actions/upload-artifact@v4
         with:
