@@ -11,44 +11,90 @@ jobs:
         continue-on-error: true
         run: |
           if command -v apk >/dev/null; then
-            apk add --no-cache unzip make bash || true
-            apk add --no-cache 7zip || apk add --no-cache p7zip || true
+            apk add --no-cache unzip make bash findutils || true
             apk add --no-cache unrar || true
+            apk add --no-cache 7zip || true
+            apk add --no-cache libarchive-tools || true
           else
             apt-get update || true
             apt-get install -y unzip make p7zip-full || true
-            apt-get install -y unrar-free || true
+            apt-get install -y unrar-free libarchive-tools || true
           fi
+          true
 
       - name: Pasang library
         continue-on-error: true
         run: |
+          set +e
           PREFIX=$(psp-config --psp-prefix)
-          echo "PREFIX=$PREFIX"
-          cd 3libs
+          cd 3libs || exit 0
           ls -la
           unzip -o libpspmath.zip
-          7z x -y noisepp.rar || 7za x -y noisepp.rar || unrar x -o+ noisepp.rar
+          unrar x -o+ noisepp.rar || 7zz x -y noisepp.rar || 7z x -y noisepp.rar || 7za x -y noisepp.rar || bsdtar -xf noisepp.rar
           ls -la
-          cd libpspmath*
-          ls -la
-          make clean || true
-          make
-          make install
-          cd ..
-          cd noisepp*
-          ls -la
-          make
-          mkdir -p $PREFIX/include/noisepp
-          find . -name "*.h" -exec cp --parents {} $PREFIX/include/noisepp/ \;
-          find . -name "libNoisepp.a" -exec cp {} $PREFIX/lib/ \;
-     
-      - name: Build game
+          for d in libpspmath*/; do
+            if [ -d "$d" ]; then
+              (cd "$d" && make clean; make && make install)
+            fi
+          done
+          ND=$(find . -maxdepth 2 -type d -iname 'noisepp*' | head -n1)
+          echo "Folder noisepp: $ND"
+          if [ -n "$ND" ]; then
+            cd "$ND"
+            ls -la
+            cat compile.bat
+            mkdir -p "$PREFIX/include/noisepp"
+            cp -r . "$PREFIX/include/noisepp/"
+            find . -name '*.h' -exec cp {} "$PREFIX/include/noisepp/" \;
+            if ls Makefile* makefile* >/dev/null 2>&1; then make; fi
+            LIB=$(find . -name 'libNoisepp.a' | head -n1)
+            if [ -z "$LIB" ]; then
+              echo "Kompilasi manual noisepp"
+              mkdir -p /tmp/np
+              INC=$(find . -type d | sed 's/^/-I/' | tr '\n' ' ')
+              for f in $(find . -name '*.cpp' -not -ipath '*example*' -not -ipath '*test*' -not -ipath '*demo*'); do
+                o=/tmp/np/$(echo "$f" | tr '/.' '__').o
+                psp-g++ -O2 -fpermissive -w $INC -c "$f" -o "$o"
+              done
+              psp-ar rcs libNoisepp.a /tmp/np/*.o
+              LIB=libNoisepp.a
+            fi
+            cp "$LIB" "$PREFIX/lib/libNoisepp.a"
+            ls -la "$PREFIX/lib" | grep -i noise
+          fi
+          true
+
+      - name: Tambal kode lama
+        continue-on-error: true
         run: |
-          sed -i 's/= get_crc_table();/= (const unsigned long*)get_crc_table();/' Aurora/Utils/pgeZip.c
-          make -k
+          sed -i 's/get_crc_table()/(const unsigned long*)get_crc_table()/g' Aurora/Utils/pgeZip.c
+          sed -i '/build.mak/i CFLAGS += -Wno-error -Wno-incompatible-pointer-types -Wno-int-conversion -Wno-implicit-function-declaration -Wno-implicit-int\nCXXFLAGS += -fpermissive -Wno-error' MakefileGame
+          grep -n "CFLAGS\|build.mak" MakefileGame || true
+
+      - name: Build game
+        continue-on-error: true
+        run: |
+          make -k 2>&1 | tee build.log
+          true
+
+      - name: Ringkasan
+        if: always()
+        run: |
+          {
+            echo "## Hasil build"
+            if find . -name EBOOT.PBP | grep -q .; then echo "EBOOT.PBP BERHASIL dibuat"; else echo "EBOOT.PBP GAGAL dibuat"; fi
+            echo "### Daftar error"
+            echo '```'
+            grep -E ' error: |: error|undefined reference|No such file|cannot find|\*\*\*' build.log 2>/dev/null | grep -v '^psp-' | head -n 40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          find . -name EBOOT.PBP | grep -q .
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: EBOOT
-          path: "**/EBOOT.PBP"
+          path: |
+            **/EBOOT.PBP
+            build.log
+          if-no-files-found: warn
