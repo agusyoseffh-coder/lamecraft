@@ -28,28 +28,22 @@ jobs:
           set +e
           PREFIX=$(psp-config --psp-prefix)
           cd 3libs || exit 0
-          ls -la
           unzip -o libpspmath.zip
           unrar x -o+ noisepp.rar || 7zz x -y noisepp.rar || 7z x -y noisepp.rar || 7za x -y noisepp.rar || bsdtar -xf noisepp.rar
-          ls -la
           for d in libpspmath*/; do
             if [ -d "$d" ]; then
               (cd "$d" && make clean; make && make install)
             fi
           done
           ND=$(find . -maxdepth 2 -type d -iname 'noisepp*' | head -n1)
-          echo "Folder noisepp: $ND"
           if [ -n "$ND" ]; then
             cd "$ND"
-            ls -la
-            cat compile.bat
             mkdir -p "$PREFIX/include/noisepp"
             cp -r . "$PREFIX/include/noisepp/"
             find . -name '*.h' -exec cp {} "$PREFIX/include/noisepp/" \;
             if ls Makefile* makefile* >/dev/null 2>&1; then make; fi
             LIB=$(find . -name 'libNoisepp.a' | head -n1)
             if [ -z "$LIB" ]; then
-              echo "Kompilasi manual noisepp"
               mkdir -p /tmp/np
               INC=$(find . -type d | sed 's/^/-I/' | tr '\n' ' ')
               for f in $(find . -name '*.cpp' -not -ipath '*example*' -not -ipath '*test*' -not -ipath '*demo*'); do
@@ -60,7 +54,6 @@ jobs:
               LIB=libNoisepp.a
             fi
             cp "$LIB" "$PREFIX/lib/libNoisepp.a"
-            ls -la "$PREFIX/lib" | grep -i noise
           fi
           true
 
@@ -68,8 +61,15 @@ jobs:
         continue-on-error: true
         run: |
           sed -i 's/get_crc_table()/(const unsigned long*)get_crc_table()/g' Aurora/Utils/pgeZip.c
+          sed -i 's/DirEntry->d_stat.st_attr & FIO_SO_IFREG/DirEntry->d_name[0] != 0x2e/' LameCraft/StateMenu.cpp
+          sed -i 's/Dir = opendir(dirName);/Dir = opendir(dirName); if(Dir == NULL) return;/' LameCraft/StateMenu.cpp
           sed -i '/build.mak/i CFLAGS += -Wno-error -Wno-incompatible-pointer-types -Wno-int-conversion -Wno-implicit-function-declaration -Wno-implicit-int\nCXXFLAGS += -fpermissive -Wno-error' MakefileGame
-          grep -n "CFLAGS\|build.mak" MakefileGame || true
+          M=$(find / -name mmio.h 2>/dev/null | head -n1)
+          echo "mmio.h = $M"
+          if [ -n "$M" ]; then
+            sed -i "/build.mak/i CFLAGS += -I$(dirname $M)\nCXXFLAGS += -I$(dirname $M)" MakefileGame
+          fi
+          true
 
       - name: Build game
         continue-on-error: true
@@ -86,6 +86,15 @@ jobs:
             echo "### Daftar error"
             echo '```'
             grep -E ' error: |: error|undefined reference|No such file|cannot find|\*\*\*' build.log 2>/dev/null | grep -v '^psp-' | head -n 40
+            echo '```'
+            echo "### Info proyek"
+            echo '```'
+            echo "--- makefile"; cat makefile
+            echo "--- MakefileGame"; cat MakefileGame
+            echo "--- root"; ls
+            echo "--- sound_utils"; ls LameCraft/sound_utils
+            echo "--- mod.c"; head -n 12 LameCraft/sound_utils/mod.c
+            echo "--- mmio.h"; find / -name 'mmio.h' 2>/dev/null | head -n 5
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           find . -name EBOOT.PBP | grep -q .
