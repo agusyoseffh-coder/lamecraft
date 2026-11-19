@@ -6,13 +6,15 @@ jobs:
     container: pspdev/pspdev:latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tools
+       - name: Tools
         run: |
           if command -v apk >/dev/null; then
-            apk add --no-cache unzip unrar p7zip make findutils bash
+            for p in unzip unrar 7zip p7zip make findutils bash; do apk add --no-cache $p || true; done
           else
-            apt-get update && apt-get install -y unzip unrar-free p7zip-full make
+            apt-get update || true
+            for p in unzip unrar-free p7zip-full make; do apt-get install -y $p || true; done
           fi
+          true
       - name: Build libraries
         run: |
           set -x
