@@ -1,0 +1,40 @@
+name: Build PSP
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: pspdev/pspdev:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          if command -v apk >/dev/null; then
+            apk add --no-cache unzip unrar p7zip make findutils bash
+          else
+            apt-get update && apt-get install -y unzip unrar-free p7zip-full make
+          fi
+      - name: Build libraries
+        run: |
+          set -x
+          PREFIX=$(psp-config --psp-prefix)
+          LIBDIR=$(find . -type d -name 3libs | head -n1)
+          cd "$LIBDIR"
+          ls -la
+          unzip -o libpspmath.zip || true
+          (7z x -y noisepp.rar || unrar x -o+ noisepp.rar) || true
+          ls -R | head -80
+          cd libpspmath* && (make clean; make; make install) || true
+          cd "$GITHUB_WORKSPACE/$LIBDIR"
+          cd noisepp* || true
+          ls -la
+          cat compile.bat || true
+          (make || true)
+          mkdir -p "$PREFIX/include/noisepp"
+          cp -r . "$PREFIX/include/noisepp/" || true
+          find . -name "libNoisepp.a" -exec cp {} "$PREFIX/lib/" \; || true
+      - name: Build game
+        run: make
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EBOOT
+          path: "**/EBOOT.PBP"
