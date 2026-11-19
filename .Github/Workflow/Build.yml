@@ -1,0 +1,52 @@
+name: Build PSP
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: pspdev/pspdev:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pasang alat
+        continue-on-error: true
+        run: |
+          if command -v apk >/dev/null; then
+            apk add --no-cache unzip make bash || true
+            apk add --no-cache 7zip || apk add --no-cache p7zip || true
+            apk add --no-cache unrar || true
+          else
+            apt-get update || true
+            apt-get install -y unzip make p7zip-full || true
+            apt-get install -y unrar-free || true
+          fi
+
+      - name: Pasang library
+        continue-on-error: true
+        run: |
+          PREFIX=$(psp-config --psp-prefix)
+          echo "PREFIX=$PREFIX"
+          cd 3libs
+          ls -la
+          unzip -o libpspmath.zip
+          7z x -y noisepp.rar || 7za x -y noisepp.rar || unrar x -o+ noisepp.rar
+          ls -la
+          cd libpspmath*
+          ls -la
+          make clean || true
+          make
+          make install
+          cd ..
+          cd noisepp*
+          ls -la
+          make
+          mkdir -p $PREFIX/include/noisepp
+          find . -name "*.h" -exec cp --parents {} $PREFIX/include/noisepp/ \;
+          find . -name "libNoisepp.a" -exec cp {} $PREFIX/lib/ \;
+
+      - name: Build game
+        run: make
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EBOOT
+          path: "**/EBOOT.PBP"
