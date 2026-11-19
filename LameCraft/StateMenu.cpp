@@ -4,6 +4,7 @@
 #include "LoadingScreen.h"
 #include "InputHelper.h"
 #include "TextureHelper.h"
+#include "ModMenu.h"
 
 #include <Aurora/System/NetworkManager.h>
 
@@ -118,7 +119,7 @@ void StateMenu::HandleEvents(StateManager* sManager)
 			{
 				selectPos--;
 				if(selectPos < 0)
-					selectPos = 3;
+					selectPos = 4;
 
 				mSoundMgr->PlayMenuSound();
 			}
@@ -126,7 +127,7 @@ void StateMenu::HandleEvents(StateManager* sManager)
 			if(mSystemMgr->KeyPressed(PSP_CTRL_DOWN))
 			{
 				selectPos++;
-				if(selectPos > 3)
+				if(selectPos > 4)
 					selectPos = 0;
 
 				mSoundMgr->PlayMenuSound();
@@ -165,6 +166,12 @@ void StateMenu::HandleEvents(StateManager* sManager)
 					//about
 					menuState = 3;
 					aboutPos = 1;
+				}
+				if(selectPos == 4)
+				{
+					//mods
+					ModScan();
+					menuState = 8;
 				}
 			}
 		}
@@ -625,6 +632,12 @@ void StateMenu::HandleEvents(StateManager* sManager)
 
 		}
 		break;
+		case 8://mods
+		{
+			if(ModHandle(mSystemMgr,mSoundMgr))
+				menuState = 0;
+		}
+		break;
 	}
 
 }
@@ -660,23 +673,27 @@ void StateMenu::Draw(StateManager* sManager)
 			logoSprite->Draw();
 
 			//play
-			buttonSprite->SetPosition(240,120);
+			buttonSprite->SetPosition(240,110);
 			buttonSprite->Draw();
 
 			//load
-			buttonSprite->SetPosition(240,160);
+			buttonSprite->SetPosition(240,145);
 			buttonSprite->Draw();
 
 			//options
-			buttonSprite->SetPosition(240,200);
+			buttonSprite->SetPosition(240,180);
 			buttonSprite->Draw();
 
 			//about
-			buttonSprite->SetPosition(240,240);
+			buttonSprite->SetPosition(240,215);
+			buttonSprite->Draw();
+
+			//mods
+			buttonSprite->SetPosition(240,250);
 			buttonSprite->Draw();
 
 			//selected button
-			sbuttonSprite->SetPosition(240,(selectPos * 40) + 120);
+			sbuttonSprite->SetPosition(240,(selectPos * 35) + 110);
 			sbuttonSprite->Draw();
 
 			sceGuDisable(GU_BLEND);
@@ -684,10 +701,11 @@ void StateMenu::Draw(StateManager* sManager)
 
 			//draw subtitles on buttons
 
-			mRender->DebugPrint(240,125,"Play");
-			mRender->DebugPrint(240,165,"Load");
-			mRender->DebugPrint(240,205,"Options");
-			mRender->DebugPrint(240,245,"About");
+			mRender->DebugPrint(240,115,"Play");
+			mRender->DebugPrint(240,150,"Load");
+			mRender->DebugPrint(240,185,"Options");
+			mRender->DebugPrint(240,220,"About");
+			mRender->DebugPrint(240,255,"Mods");
 		}
 		break;
 		case 1://load menu
@@ -931,6 +949,11 @@ void StateMenu::Draw(StateManager* sManager)
 			makeCaves == true ? mRender->DebugPrint(240,225,"Caves : ON"):mRender->DebugPrint(240,225,"Caves : OFF");
 
 			mRender->DebugPrint(240,250,"Back");
+		}
+		break;
+		case 8://mods
+		{
+			ModDraw(mRender,backSprite);
 		}
 		break;
 	}
